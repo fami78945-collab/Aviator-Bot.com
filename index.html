@@ -606,7 +606,8 @@
             margin: 0 auto;
         }
 
-        .nav-home, .nav-chat {
+        /* MODIFIED: Removed inline onclick for logout */
+        .nav-home, .nav-chat { 
             font-size: 1.3em;
             text-decoration: none;
             color: white;
@@ -927,12 +928,6 @@
             }
         }
     </style>
-
-    <!-- GitHub Pages Compatibility Fix -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
-    
 </head>
 <body>
     <div class="app-container">
@@ -1035,7 +1030,7 @@
 
             <footer>
                 <div class="nav-buttons">
-                    <a href="#" class="nav-home" onclick="logout()">
+                    <a href="#" class="nav-home"> 
                         <i class="fas fa-home"></i>
                     </a>
                     <div class="timer" id="timerDisplay">00:00:00</div>
@@ -1092,6 +1087,12 @@
     let demoModeActive = false;
     let demoClicksRemaining = 0;
     const MAX_DEMO_CLICKS = 10;
+    
+    // START: New Ad Control Variables
+    let libtl_ad_loaded = false;
+    const AD_CLICK_DELAY = 1000; // 1 second delay for ad (used for all non-nextButton clicks)
+    // END: New Ad Control Variables
+
 
     // Prediction settings from admin panel
     let predictionSettings = {
@@ -1148,6 +1149,7 @@
     const buttonLoading = document.getElementById('buttonLoading');
     const loginLoading = document.getElementById('loginLoading'); // The full overlay element
     const accessKeyInput = document.getElementById('accessKey'); // New reference for input
+    const logoutButton = document.querySelector('.nav-home'); // Reference for logout link
     
     const whatsappOption = document.getElementById('whatsappOption');
     const telegramOption = document.getElementById('telegramOption');
@@ -1238,42 +1240,103 @@
         toggleCircleBlur(false);
         toggleCircleAnimation(false);
     });
+    
+    // START: New function to dynamically load the ad script
+    function loadAndShowAdOnce() {
+        // Only load the script if it hasn't been loaded before
+        if (!libtl_ad_loaded) {
+            const adScript = document.createElement('script');
+            adScript.src = '//libtl.com/sdk.js';
+            adScript.setAttribute('data-zone', '10001728');
+            adScript.setAttribute('data-sdk', 'show_10001728');
+            
+            // Append the script to the body to load and execute
+            document.body.appendChild(adScript);
+            
+            libtl_ad_loaded = true;
+            console.log('Ad script dynamically loaded on click.');
+        } else {
+            console.log('Ad script already loaded.');
+        }
+    }
+    // END: New function to dynamically load the ad script
 
-    // Set up event listeners
+    // START: Helper function to handle ad-enabled button clicks
+    function handleAdClick(e, callback) {
+        e.preventDefault();
+        
+        // 1. Load the ad script
+        loadAndShowAdOnce(); 
+        
+        // 2. Disable the element visually/temporarily 
+        const target = e.currentTarget;
+        const isInteractive = target.tagName === 'BUTTON' || target.tagName === 'A';
+        
+        if (isInteractive) {
+            target.style.pointerEvents = 'none'; // Disable clicking
+            target.style.opacity = '0.5'; // Visual cue for waiting
+        }
+
+        // 3. Wait for the delay, then execute the original function
+        setTimeout(() => {
+            if (isInteractive) {
+                target.style.pointerEvents = 'auto'; // Re-enable clicking
+                target.style.opacity = '1'; // Reset opacity
+            }
+            callback();
+        }, AD_CLICK_DELAY);
+    }
+    // END: Helper function to handle ad-enabled button clicks
+
+
+    // Set up event listeners - MODIFIED FOR NEW AD LOGIC
     function setupEventListeners() {
         loginForm.addEventListener('submit', function(e) {
             e.preventDefault();
             handleLogin();
         });
 
+        // Ad Logic for demoAccessLink
         demoAccessLink.addEventListener('click', function(e) { 
-            e.preventDefault();
-            handleDemoAccess();
+            handleAdClick(e, handleDemoAccess);
         });
 
+        // Ad Logic for helpLineLink (Login page)
+        helpLineLink.addEventListener('click', function(e) {
+            handleAdClick(e, () => showHelplineMenu('login'));
+        });
+        
+        // Ad Logic for aboutUsIcon (Login page top right) - REQUIRED BY USER
+        aboutUsIcon.addEventListener('click', function(e) {
+            handleAdClick(e, showAboutUsPage);
+        });
+
+        // MODIFIED: 'Next' button click handler - REMOVED AD LOGIC & DELAY
         nextButton.addEventListener('click', function() {
             if (!nextButton.disabled) {
-                generatePrediction();
+                // 1. Disable button immediately
+                nextButton.disabled = true;
+                
+                // 2. Call prediction function immediately (no ad, no delay)
+                generatePrediction(); 
             }
         });
+        // END MODIFIED nextButton
 
-        aboutUsIcon.addEventListener('click', function() {
-            showAboutUsPage();
-        });
-
+        // backBtn remains the same (no ad needed for back)
         backBtn.addEventListener('click', function() {
             aboutUsPage.style.display = 'none';
             loginPage.style.display = 'flex';
         });
 
-        helpLineLink.addEventListener('click', function(e) {
-            e.preventDefault();
-            showHelplineMenu('login');
+        // Logout Button (nav-home) - Ad Logic, overrides potential inline onclick
+        logoutButton.addEventListener('click', function(e) {
+            handleAdClick(e, logout);
         });
-
+        
+        // Help Line Button (nav-chat) - Ad Logic
         helpLineButton.addEventListener('click', function(e) {
-            e.preventDefault();
-            showHelplineMenu('home');
+            handleAdClick(e, () => showHelplineMenu('home'));
         });
 
         helplineClose.addEventListener('click', function() {
@@ -1484,13 +1547,17 @@
             if (demoClicksRemaining <= 0) {
                 updateDemoState();
                 showNotification('**Demo Limit Reached!** You cannot make any more predictions.');
+                // Re-enable the button if it was disabled by the ad logic, otherwise it remains locked by updateDemoState()
+                if(nextButton.querySelector('.button-text').textContent !== 'Locked') {
+                    nextButton.disabled = false;
+                }
                 return;
             }
             demoClicksRemaining--;
             sessionStorage.setItem('demoClicksRemaining', demoClicksRemaining);
         }
 
-        nextButton.disabled = true;
+        // The button is already disabled from the click handler, just update UI
         nextButton.querySelector('.button-text').style.display = 'none';
         nextButton.querySelector('.countdown-text').style.display = 'block';
 
