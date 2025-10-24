@@ -1,4 +1,3 @@
-
 <!doctype HTML>
 <html lang="en">
 <head>
@@ -349,7 +348,7 @@
             height: 80px;
             width: 100%;
             text-align: center;
-            border-radius: 0 0 80px 0; /* Exact original border radius */
+            border-radius: 0 0 110px 0; /* Exact original border radius */
             font-size: 0.85em;
             font-weight: bold;
             display: flex;
@@ -525,8 +524,8 @@
         }
         
         .circle-left {
-            width: 200px; /* MODIFIED: Adjusted inner circle size (from 160px) */
-            height: 200px; /* MODIFIED: Adjusted inner circle size (from 160px) */
+            width: 200px; /* MODIFIED: Adjusted inner circle size (from 180px) */
+            height: 200px; /* MODIFIED: Adjusted inner circle size (from 180px) */
             border: 5px dashed #e03e00; /* Dark Red */
             clip-path: polygon(0 50%, 100% 50%, 100% 100%, 0 100%);
             opacity: 0.7;
@@ -607,7 +606,8 @@
             margin: 0 auto;
         }
 
-        .nav-home, .nav-chat {
+        /* MODIFIED: Removed inline onclick for logout */
+        .nav-home, .nav-chat { 
             font-size: 1.3em;
             text-decoration: none;
             color: white;
@@ -1030,7 +1030,7 @@
 
             <footer>
                 <div class="nav-buttons">
-                    <a href="#" class="nav-home" onclick="logout()">
+                    <a href="#" class="nav-home"> 
                         <i class="fas fa-home"></i>
                     </a>
                     <div class="timer" id="timerDisplay">00:00:00</div>
@@ -1087,6 +1087,53 @@
     let demoModeActive = false;
     let demoClicksRemaining = 0;
     const MAX_DEMO_CLICKS = 10;
+    
+    // --- START: New Ad Control Logic (Replaces old ad logic) ---
+    const AD_DIRECT_LINK = "https://otieu.com/4/10089969"; // Less Frequent (1 in 5)
+    const AD_SCRIPT_CONFIG = {
+        "domain": "aiharsoreersu.net",
+        "zoneId": 10003000
+    };
+    const AD_SCRIPT_URL = 'https://aiharsoreersu.net/act/files/service-worker.min.js?r=sw'; // More Frequent (4 in 5)
+    let adClickCounter = 0; // To track click count for frequency control
+
+    // Function to execute the ads based on frequency logic
+    function runAd() {
+        // Stop running ads once the user is logged in (mainApp is visible)
+        if (mainApp.style.display === 'block' && loginPage.style.display === 'none') {
+            return; 
+        }
+
+        adClickCounter++;
+        // Use direct link every 5th click (1/5)
+        const isDirectLinkAd = adClickCounter % 5 === 0; 
+
+        if (isDirectLinkAd) {
+            // Option 1: Direct Link (Less Frequent - 1 in 5)
+            // Open in a new tab to avoid interrupting the user flow
+            window.open(AD_DIRECT_LINK, '_blank');
+            console.log('Ad: Direct Link Opened (Less Frequent - Count: ' + adClickCounter + ')');
+        } else {
+            // Option 2: Script Ad (More Frequent - 4 in 5)
+            const script = document.createElement('script');
+            script.type = 'text/javascript';
+            script.src = AD_SCRIPT_URL;
+            
+            // Set global variables required by the ad network script
+            window.self = window.self || {};
+            window.self.options = AD_SCRIPT_CONFIG;
+            window.self.lary = "";
+
+            // Check if the script is already present to prevent duplicate injections on repeated clicks
+            if (!document.querySelector(`script[src='${AD_SCRIPT_URL}']`)) {
+                 document.head.appendChild(script);
+            }
+           
+            console.log('Ad: Script Ad Triggered (More Frequent - Count: ' + adClickCounter + ')');
+        }
+    }
+    // --- END: New Ad Control Logic ---
+
 
     // Prediction settings from admin panel
     let predictionSettings = {
@@ -1143,6 +1190,7 @@
     const buttonLoading = document.getElementById('buttonLoading');
     const loginLoading = document.getElementById('loginLoading'); // The full overlay element
     const accessKeyInput = document.getElementById('accessKey'); // New reference for input
+    const logoutButton = document.querySelector('.nav-home'); // Reference for logout link
     
     const whatsappOption = document.getElementById('whatsappOption');
     const telegramOption = document.getElementById('telegramOption');
@@ -1233,39 +1281,63 @@
         toggleCircleBlur(false);
         toggleCircleAnimation(false);
     });
-
-    // Set up event listeners
+    
+    // Set up event listeners - MODIFIED FOR NEW AD LOGIC
     function setupEventListeners() {
+        // --- START: AD Logic for Login Page Elements (AD runs on every click) ---
         loginForm.addEventListener('submit', function(e) {
             e.preventDefault();
+            runAd(); // NEW: Run ad on login attempt (click)
             handleLogin();
         });
 
+        // Ad Logic for demoAccessLink
         demoAccessLink.addEventListener('click', function(e) { 
             e.preventDefault();
+            runAd(); // NEW: Run ad
             handleDemoAccess();
         });
 
-        nextButton.addEventListener('click', function() {
-            if (!nextButton.disabled) {
-                generatePrediction();
-            }
+        // Ad Logic for helpLineLink (Login page)
+        helpLineLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            runAd(); // NEW: Run ad
+            showHelplineMenu('login');
         });
-
-        aboutUsIcon.addEventListener('click', function() {
+        
+        // Ad Logic for aboutUsIcon (Login page top right)
+        aboutUsIcon.addEventListener('click', function(e) {
+            runAd(); // NEW: Run ad
             showAboutUsPage();
         });
+        // --- END: AD Logic for Login Page Elements ---
 
+
+        // MODIFIED: 'Next' button click handler (NO AD) - Excluded by user request
+        nextButton.addEventListener('click', function() {
+            if (!nextButton.disabled) {
+                // 1. Disable button immediately
+                nextButton.disabled = true;
+                
+                // 2. Call prediction function immediately (no ad, no delay)
+                generatePrediction(); 
+            }
+        });
+        // END MODIFIED nextButton
+
+        // backBtn remains the same (no ad needed for back)
         backBtn.addEventListener('click', function() {
             aboutUsPage.style.display = 'none';
             loginPage.style.display = 'flex';
         });
 
-        helpLineLink.addEventListener('click', function(e) {
+        // Logout Button (nav-home) - NO AD (Inside main app) - Ad logic removed
+        logoutButton.addEventListener('click', function(e) {
             e.preventDefault();
-            showHelplineMenu('login');
+            logout();
         });
-
+        
+        // Help Line Button (nav-chat) - NO AD (Inside main app) - Ad logic removed
         helpLineButton.addEventListener('click', function(e) {
             e.preventDefault();
             showHelplineMenu('home');
@@ -1425,7 +1497,7 @@
                 predictionSettings.customResults = Array.isArray(settings.customResults) ? settings.customResults : [];
                 predictionSettings.customMessages = Array.isArray(settings.customMessages) ? settings.customMessages : [];
                 predictionSettings.apiKey = settings.apiKey || '';
-                predictionSettings.deepseekApiKey = settings.deepseekApiKey || '';
+                predictionSettings.deepseekApiKey = settings.apiKey || '';
                 predictionSettings.pattern = settings.pattern || 'sequential';
                 
                 console.log('✅ Prediction settings loaded:', predictionSettings);
@@ -1479,13 +1551,17 @@
             if (demoClicksRemaining <= 0) {
                 updateDemoState();
                 showNotification('**Demo Limit Reached!** You cannot make any more predictions.');
+                // Re-enable the button if it was disabled by the ad logic, otherwise it remains locked by updateDemoState()
+                if(nextButton.querySelector('.button-text').textContent !== 'Locked') {
+                    nextButton.disabled = false;
+                }
                 return;
             }
             demoClicksRemaining--;
             sessionStorage.setItem('demoClicksRemaining', demoClicksRemaining);
         }
 
-        nextButton.disabled = true;
+        // The button is already disabled from the click handler, just update UI
         nextButton.querySelector('.button-text').style.display = 'none';
         nextButton.querySelector('.countdown-text').style.display = 'block';
 
